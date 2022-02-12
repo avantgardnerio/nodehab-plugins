@@ -1,8 +1,8 @@
 module.exports = class GarageDoorTimer {
-    constructor(driver, config, webPush, db) {
+    constructor(driver, config, notify, db) {
         this.driver = driver;
         this.config = config;
-        this.webPush = webPush;
+        this.notify = notify;
         this.db = db;
         this.timeout = undefined;
         this.notifyThreshold = 5 * 60;
@@ -40,20 +40,8 @@ module.exports = class GarageDoorTimer {
 
         // notify subscribers
         this.timeout = setTimeout(async () => {
-            const subscriptions = await this.db.many('select * from subscriptions');
-            for(let subscription of subscriptions) {
-                try {
-                    const msg = `Garage door has been open for ${this.notifyThreshold} seconds`;
-                    console.log(`Notifying subscription ${subscription.id} ${msg}`);
-                    await this.webPush.sendNotification(subscription.subscription, msg);
-                } catch(ex) {
-                    console.error(`Error pushing notification: ${ex.statusCode}`, ex);
-                    if(ex.statusCode >= 400 && ex.statusCode < 500) {
-                        console.warn(`Removing dead subscription ${subscription.id}...`);
-                        await this.db.none(`delete from subscriptions where id=$1`, [subscription.id]);
-                    }
-                }
-            }
+            const msg = `Garage door has been open for ${this.notifyThreshold} seconds`;
+            await this.notify(msg);
         }, this.notifyThreshold * 1000);
     }
 }
