@@ -24,7 +24,7 @@ module.exports = async (driver, config, notify) => {
             return; // Don't care
         }
         timeout = setTimeout(async () => {
-            await notify(`Front lock has been ${currentState} for ${notifyThreshold} seconds`);
+            await notify(`${lockName} has been ${currentState} for ${notifyThreshold} seconds`);
         }, notifyThreshold * 1000);
     };
     update(await frontLock.getValue({ commandClass, property }));
