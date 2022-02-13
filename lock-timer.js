@@ -1,4 +1,4 @@
-const notifyThreshold = 20;
+const notifyThreshold = 5 * 60;
 const commandClass = 98;
 const property = `boltStatus`;
 const lockName = 'Front lock';
