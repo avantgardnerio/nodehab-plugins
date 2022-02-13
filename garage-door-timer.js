@@ -1,48 +1,36 @@
-module.exports = class GarageDoorTimer {
-    constructor(driver, config, notify, db) {
-        this.driver = driver;
-        this.config = config;
-        this.notify = notify;
-        this.db = db;
-        this.timeout = undefined;
-        this.notifyThreshold = 5 * 60;
-        this.currentState = undefined;
+const notifyThreshold = 20;
+const commandClass = 102;
+const doorName = 'Garage door';
+const property = `currentState`;
 
-        const deviceId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === 'Garage door'));
-        this.device = driver.controller.nodes.get(deviceId);
+module.exports = async (driver, config, notify) => {
+    let timeout;
+    let currentState;
 
-        console.log(`garageDoorId=${deviceId}`);
-    }
+    const deviceId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === doorName));
+    const device = driver.controller.nodes.get(deviceId);
+    console.log(`garageDoorId=${deviceId}`);
 
-    async init() {
-        const currentState = await this.device.getValue({ commandClass: 102, property: 'currentState' });
-        console.log(`Garage state is ${currentState}`);
-        await this.update(currentState);
-    }
-
-    async valueUpdated(node, args) {
-        if(node.nodeId !== this.device.nodeId) return;
-        if(args.commandClass !== 102) return;
-        if(args.property !== "currentState") return;
-
-        await this.update(args.newValue);
-    }
-
-    async update(currentState) {
-        this.currentState = currentState;
+    const update = async (newState) => {
+        currentState = newState;
         if(currentState === 0) { // 0=closed
-            if(this.timeout) {
-                clearTimeout(this.timeout);
-                this.timeout = undefined;
+            if(timeout) {
+                clearTimeout(timeout);
+                timeout = undefined;
             }
             return; // Don't care
         }
+        timeout = setTimeout(async () => {
+            await notify(`${doorName} has been open for ${notifyThreshold} seconds`);
+        }, notifyThreshold * 1000);
+    }
+    await update(await device.getValue({ commandClass, property }));
 
-        // notify subscribers
-        this.timeout = setTimeout(async () => {
-            const msg = `Garage door has been open for ${this.notifyThreshold} seconds`;
-            await this.notify(msg);
-        }, this.notifyThreshold * 1000);
+    return {
+        valueUpdated: async (node, args) => {
+            if(node.nodeId !== device.nodeId || args.commandClass !== commandClass || args.property !== property) return;
+            await update(args.newValue);
+        }    
     }
 }
 

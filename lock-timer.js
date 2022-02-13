@@ -1,48 +1,39 @@
-module.exports = class LockTimer {
-    constructor(driver, config, notify, db) {
-        this.driver = driver;
-        this.config = config;
-        this.notify = notify;
-        this.db = db;
-        this.timeout = undefined;
-        this.notifyThreshold = 5 * 60;
+const notifyThreshold = 20;
+const commandClass = 98;
+const property = `boltStatus`;
+const lockName = 'Front lock';
+const doorName = 'Front door';
 
-        const frontLockId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === 'Front lock'));
-        const frontDoorId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === 'Front door'));
-        this.frontLock = driver.controller.nodes.get(frontLockId);
-        this.frontDoor = driver.controller.nodes.get(frontDoorId);
+module.exports = async (driver, config, notify) => {
+    let timeout;
+    let currentState;
+    
+    const frontLockId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === lockName));
+    const frontDoorId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === doorName));
+    const frontLock = driver.controller.nodes.get(frontLockId);
+    const frontDoor = driver.controller.nodes.get(frontDoorId);
+    console.log(`frontLockId=${frontLockId} frontDoorId=${frontDoorId}`);
 
-        console.log(`frontLockId=${frontLockId} frontDoorId=${frontDoorId}`);
-    }
-
-    async init() {
-        const boltStatus = await this.frontLock.getValue({ commandClass: 98, property: 'boltStatus' });
-        this.update(boltStatus);
-    }
-
-    async valueUpdated(node, args) {
-        if(node.nodeId !== this.frontLock.nodeId) return;
-        if(args.commandClass !== 98) return;
-        if(args.property !== "boltStatus") return;
-
-        await this.update(args.newValue);
-    }
-
-    async update(boltStatus) {
-        this.boltStatus = boltStatus;
-        if(boltStatus === 'locked') {
-            if(this.timeout) {
-                clearTimeout(this.timeout);
-                this.timeout = undefined;
+    const update = async (newState) => {
+        currentState = newState;
+        if(currentState === 'locked') {
+            if(timeout) {
+                clearTimeout(timeout);
+                timeout = undefined;
             }
             return; // Don't care
         }
+        timeout = setTimeout(async () => {
+            await notify(`Front lock has been ${currentState} for ${notifyThreshold} seconds`);
+        }, notifyThreshold * 1000);
+    };
+    update(await frontLock.getValue({ commandClass, property }));
 
-        // notify subscribers
-        this.timeout = setTimeout(async () => {
-            const msg = `Front lock has been ${boltStatus} for ${this.notifyThreshold} seconds`;
-            await this.notify(msg);
-        }, this.notifyThreshold * 1000);
+    return {
+        valueUpdated: async (node, args) => {
+            if(node.nodeId !== frontLock.nodeId || args.commandClass !== commandClass || args.property !== property) return;
+            await update(args.newValue);
+        },
     }
 }
 
