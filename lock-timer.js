@@ -1,18 +1,15 @@
-const notifyThreshold = 5 * 60;
 const commandClass = 98;
 const property = `boltStatus`;
-const lockName = 'Front lock';
-const doorName = 'Front door';
 
-module.exports = async (driver, config, notify) => {
+module.exports = async (driver, config, notify, db, opts) => {
     let timeout;
     let currentState;
     
-    const frontLockId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === lockName));
-    const frontDoorId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === doorName));
+    const frontLockId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === opts.lockName));
+    const frontDoorId = parseInt(Object.keys(config.nodes).find(k => config.nodes[k] === opts.doorName));
     const frontLock = driver.controller.nodes.get(frontLockId);
     const frontDoor = driver.controller.nodes.get(frontDoorId);
-    console.log(`frontLockId=${frontLockId} frontDoorId=${frontDoorId}`);
+    console.log(`${opts.lockName}=${frontLockId} ${opts.doorName}=${frontDoorId}`);
 
     const update = async (newState) => {
         currentState = newState;
@@ -23,9 +20,10 @@ module.exports = async (driver, config, notify) => {
             }
             return; // Don't care
         }
-        timeout = setTimeout(async () => {
-            await notify(`${lockName} has been ${currentState} for ${notifyThreshold} seconds`);
-        }, notifyThreshold * 1000);
+        timeout = timeout || setTimeout(async () => {
+            await notify(`${opts.lockName} has been ${currentState} for ${opts.notifyThreshold} seconds`);
+            timeout = undefined;
+        }, opts.notifyThreshold * 1000);
     };
     update(await frontLock.getValue({ commandClass, property }));
 
